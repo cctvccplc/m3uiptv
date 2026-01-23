@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Universal IPTV - Side-by-Side View</title>
+    <title>Universal IPTV - Auto Side-by-Side</title>
 
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/dashjs@latest/dist/dash.all.min.js"></script>
@@ -19,56 +19,44 @@
         }
         body, html { margin:0; padding:0; background:#000; color:var(--text); font-family:sans-serif; height:100vh; width:100vw; overflow:hidden;}
 
-        /* প্লেয়ার কন্টেইনার - এটি ডাইনামিক ভাবে ছোট বড় হবে */
+        /* প্লেয়ার কন্টেইনার */
         #player-container { 
-            position: fixed; 
-            top: 0; 
-            right: 0; 
-            bottom: 0; 
-            left: 0; /* শুরুতে ফুল স্ক্রিন */
-            z-index: 1; 
-            background: #000;
+            position: fixed; top: 0; right: 0; bottom: 0; left: 0; 
+            z-index: 1; background: #000;
             transition: left 0.3s ease-in-out; 
         }
 
-        /* যখন সাইডবার ওপেন হবে তখন ভিডিও ডানে সরে যাবে */
+        /* সাইডবার খোলা থাকলে ভিডিও ডানে সরবে */
         body.sidebar-open #player-container { left: var(--sidebar-width); }
         body.cat-open #player-container { left: var(--cat-width); }
 
         video { width: 100%; height: 100%; object-fit: contain; outline: none; }
 
-        /* সাইডবার প্যানেল */
+        /* প্যানেল স্টাইল */
         .overlay-panel { 
-            position: fixed; 
-            top: 0; 
-            bottom: 0; 
-            z-index: 50; 
-            background: var(--overlay-bg); 
-            transition: transform 0.3s ease-in-out;
+            position: fixed; top: 0; bottom: 0; z-index: 50; 
+            background: var(--overlay-bg); transition: transform 0.3s ease-in-out;
         }
-        
-        #category-nav { width: var(--cat-width); transform: translateX(-100%); border-right: 1px solid var(--glass); left: 0;}
-        #channel-nav { width: var(--sidebar-width); transform: translateX(-100%); border-right: 1px solid var(--glass); left: 0;}
+        #category-nav { width: var(--cat-width); transform: translateX(-100%); left: 0; border-right: 1px solid var(--glass);}
+        #channel-nav { width: var(--sidebar-width); transform: translateX(-100%); left: 0; border-right: 1px solid var(--glass);}
 
-        /* শো/হাইড ক্লাস */
-        #category-nav.show { transform: translateX(0); }
-        #channel-nav.show { transform: translateX(0); }
+        .show { transform: translateX(0) !important; }
 
-        .nav-header { padding: 20px; font-weight: bold; border-bottom: 1px solid var(--glass); color: var(--accent); font-size: 1.2rem;}
+        .nav-header { padding: 20px; font-weight: bold; border-bottom: 1px solid var(--glass); color: var(--accent); }
         .list-container { height: calc(100% - 70px); overflow-y: auto; padding: 10px; }
         .item { 
             padding: 12px 15px; margin: 5px 0; border-radius: 8px; 
             display: flex; align-items: center; cursor: pointer; 
             background: rgba(255,255,255,0.05); transition: 0.2s; outline: none;
         }
-        .item:focus, .item:hover { background: var(--accent); color: #fff; transform: scale(1.02); }
+        .item:focus, .item:hover { background: var(--accent); color: #fff; }
         .item.active { border-left: 4px solid var(--accent); background: rgba(59,130,246,0.2); }
         .item img { width: 45px; height: 30px; margin-right: 12px; object-fit: contain; background: #222; border-radius: 4px; }
 
-        #info-bar { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); padding: 10px 25px; border-radius: 30px; display: none; z-index: 100; border: 1px solid var(--accent); }
+        #info-bar { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.85); padding: 12px 25px; border-radius: 30px; display: none; z-index: 100; border: 1px solid var(--accent); }
         .setup-screen { position: fixed; inset: 0; z-index: 200; background: #000; display: flex; align-items: center; justify-content: center; padding: 20px; }
         .setup-box { width: 100%; max-width: 350px; text-align: center; }
-        input { width: 100%; padding: 12px; margin: 8px 0; background: #111; border: 1px solid var(--accent); color: #fff; border-radius: 8px; }
+        input { width: 100%; padding: 12px; margin: 8px 0; background: #111; border: 1px solid var(--accent); color: #fff; border-radius: 8px; box-sizing: border-box;}
         button { width: 100%; padding: 14px; background: var(--accent); border: 0; color: #fff; font-weight: bold; border-radius: 8px; cursor: pointer; }
     </style>
 </head>
@@ -79,8 +67,8 @@
     <div class="setup-box">
         <h2>UNIVERSAL IPTV</h2>
         <input id="m3u_input" placeholder="M3U URL">
-        <p style="margin:5px; opacity:0.5">-- OR --</p>
-        <input id="xtream_url" placeholder="Server URL (http://...)">
+        <p style="margin:5px; opacity:0.3">-- OR --</p>
+        <input id="xtream_url" placeholder="Server URL">
         <input id="xtream_user" placeholder="Username">
         <input id="xtream_pass" type="password" placeholder="Password">
         <button onclick="processLogin()">START PLAYER</button>
@@ -119,15 +107,14 @@ async function processLogin() {
     const u = document.getElementById("xtream_user").value;
     const p = document.getElementById("xtream_pass").value;
     if(x && u && p) url = `${x}/get.php?username=${u}&password=${p}&output=m3u8`;
-    if(!url) return alert("Source URL Missing");
+    if(!url) return alert("Please enter a source");
 
     try {
         const r = await fetch(url);
         parseM3U(await r.text());
         document.getElementById("boot_loader").style.display = "none";
-        // ওপেনিংয়েই সাইডবার দেখানোর জন্য
         showChannels();
-    } catch(e) { alert("Playlist Load Error"); }
+    } catch(e) { alert("Failed to load playlist"); }
 }
 
 function parseM3U(data) {
@@ -217,12 +204,16 @@ function playChannel(ch, el) {
     document.getElementById("info_name").innerText = ch.name;
     document.getElementById("info_group").innerText = ch.group;
     const bar = document.getElementById("info-bar");
-    bar.style.display="block"; setTimeout(()=>bar.style.display="none",4000);
+    bar.style.display="block"; 
+    setTimeout(()=> bar.style.display="none", 4000);
 
-    hideBars(); // ভিডিও শুরু হলে সাইডবার অটো সরে যাবে
+    // ৩ সেকেন্ড পর স্লাইডবার অটো হাইড হবে
+    setTimeout(() => {
+        hideBars(); 
+    }, 3000);
 }
 
-/* রিমোট এবং টাচ কন্ট্রোল */
+/* রিমোট কন্ট্রোল ইভেন্ট */
 document.addEventListener("keydown", e => {
     const active = document.activeElement;
 
@@ -232,7 +223,6 @@ document.addEventListener("keydown", e => {
         return;
     }
 
-    // সাইডবার বন্ধ থাকলে বাম চাপলে ওপেন হবে
     if(!body.classList.contains("sidebar-open") && !body.classList.contains("cat-open")) {
         if(["ArrowLeft", "ArrowUp", "ArrowDown", "Enter"].includes(e.key)) {
             showChannels();
@@ -242,24 +232,19 @@ document.addEventListener("keydown", e => {
 
     if(e.key === "ArrowDown") { e.preventDefault(); active?.nextElementSibling?.focus(); }
     if(e.key === "ArrowUp") { e.preventDefault(); active?.previousElementSibling?.focus(); }
-
-    if(e.key === "ArrowLeft") { 
-        if(body.classList.contains("sidebar-open")) showCategories(); 
-    }
+    if(e.key === "ArrowLeft") { if(body.classList.contains("sidebar-open")) showCategories(); }
     if(e.key === "ArrowRight") { 
         if(body.classList.contains("cat-open")) showChannels();
         else if(body.classList.contains("sidebar-open")) hideBars();
     }
-    
     if(e.key === "Enter" || e.keyCode === 13) active?.click();
 });
 
-// ভিডিও স্ক্রিনে টাচ করলে মেনু আসবে (মোবাইল/টাচ টিভি)
 video.addEventListener("click", () => {
     if(!body.classList.contains("sidebar-open")) showChannels();
     else hideBars();
 });
-
 </script>
+
 </body>
 </html>
