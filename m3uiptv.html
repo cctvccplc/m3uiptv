@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Universal IPTV - AutoPlay + Tab Hide</title>
+
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+<script src="https://cdn.jsdelivr.net/npm/dashjs@latest/dist/dash.all.min.js"></script>
+
+<style>
+:root {
+    --overlay-bg: rgba(0,0,0,0.7);
+    --accent: #3b82f6;
+    --text: #fff;
+    --glass: rgba(255,255,255,0.1);
+}
+body, html { margin:0; padding:0; background:#000; color:var(--text); font-family:sans-serif; height:100vh; width:100vw; overflow:hidden;}
+#player-container { position:fixed; inset:0; z-index:1; width:100vw; height:100vh; background:#000;}
+video { width:100%; height:100%; object-fit:contain;}
+.overlay-panel { position:fixed; top:0; bottom:0; z-index:50; background:var(--overlay-bg); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); transition: transform 0.3s ease;}
+#category-nav { left:0; width:260px; transform: translateX(-100%); border-right:1px solid var(--glass);}
+#channel-nav { left:0; width:320px; transform: translateX(0);}
+@media(max-width:600px){#channel-nav{width:80vw;}#category-nav{width:70vw;}}
+#category-nav.show { transform:translateX(0); }
+#channel-nav.hide { transform:translateX(-100%);}
+.nav-header { padding:20px; font-weight:bold; border-bottom:1px solid var(--glass); color:var(--accent);}
+.list-container { height:calc(100% - 70px); overflow-y:auto; padding:10px;}
+.item { padding:12px 15px; margin:5px 0; border-radius:8px; display:flex; align-items:center; cursor:pointer; background: rgba(255,255,255,0.05); transition:0.2s;}
+.item:focus, .item:hover { outline:none; background:var(--accent);}
+.item.active { background: rgba(59,130,246,0.4); border-left:4px solid #fff;}
+.item img { width:40px; height:30px; margin-right:12px; object-fit:contain; background:#222; border-radius:4px;}
+#info-bar { position:fixed; bottom:30px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.8); padding:10px 25px; border-radius:30px; display:none; z-index:100; border:1px solid var(--accent);}
+.setup-screen { position:fixed; inset:0; z-index:200; background:#000; display:flex; align-items:center; justify-content:center; padding:20px;}
+.setup-box { width:100%; max-width:350px; text-align:center;}
+input { width:100%; padding:12px; margin:8px 0; background:#111; border:1px solid var(--accent); color:#fff; border-radius:8px;}
+button { width:100%; padding:14px; background:var(--accent); border:0; color:#fff; font-weight:bold; border-radius:8px; cursor:pointer;}
+</style>
+</head>
+
+<body>
+<!-- SETUP SCREEN -->
+<div id="boot_loader" class="setup-screen">
+    <div class="setup-box">
+        <h2>IPTV SYSTEM</h2>
+        <input id="m3u_input" placeholder="M3U URL">
+        <p style="margin:5px; opacity:0.5">-- OR --</p>
+        <input id="xtream_url" placeholder="Xtream Server URL">
+        <input id="xtream_user" placeholder="Username">
+        <input id="xtream_pass" type="password" placeholder="Password">
+        <button onclick="processLogin()">START PLAYER</button>
+    </div>
+</div>
+
+<!-- VIDEO PLAYER -->
+<div id="player-container">
+    <video id="player" playsinline controls autoplay></video>
+</div>
+
+<!-- CATEGORY NAV -->
+<div id="category-nav" class="overlay-panel">
+    <div class="nav-header">CATEGORIES</div>
+    <div class="list-container" id="category_list"></div>
+</div>
+
+<!-- CHANNEL NAV -->
+<div id="channel-nav" class="overlay-panel">
+    <div class="nav-header" id="group_name">CHANNELS</div>
+    <div class="list-container" id="channel_list"></div>
+</div>
+
+<!-- INFO BAR -->
+<div id="info-bar">
+    <span id="info_name" style="font-weight:bold"></span> | <span id="info_group"></span>
+</div>
+
+<script>
+let allChannels = [];
+let hls = null, dash = null;
+const video = document.getElementById("player");
+
+/* ===== LOGIN & M3U PARSING ===== */
+async function processLogin() {
+    let url = document.getElementById("m3u_input").value;
+    const x = document.getElementById("xtream_url").value;
+    const u = document.getElementById("xtream_user").value;
+    const p = document.getElementById("xtream_pass").value;
+    if(x && u && p) url = `${x}/get.php?username=${u}&password=${p}&output=m3u8`;
+    if(!url) return alert("Source URL Missing");
+
+    try {
+        const r = await fetch(url);
+        parseM3U(await r.text());
+        document.getElementById("boot_loader").style.display = "none";
+
+        // ===== AUTO PLAY FIRST CHANNEL =====
+        if(allChannels.length > 0) {
+            setTimeout(()=>playChannel(allChannels[0], document.querySelector("#channel_list .item")), 300);
+        }
+
+    } catch(e) { alert("Failed to Load Playlist (CORS?)"); }
+}
+
+function parseM3U(data) {
+    allChannels = []; const groups = new Set(); let current = null;
+    data.split("\n").forEach(l => {
+        l = l.trim();
+        if(l.startsWith("#EXTINF")) {
+            current = {
+                name: l.split(",").pop().trim(),
+                logo: l.match(/tvg-logo="([^"]+)"/)?.[1] || "",
+                group: l.match(/group-title="([^"]+)"/)?.[1] || "General"
+            }; 
+            groups.add(current.group);
+        } else if(l.startsWith("http") && current) {
+            current.url = l; allChannels.push(current); current = null;
+        }
+    });
+    renderCategories(Array.from(groups).sort());
+    renderChannels(allChannels);
+}
+
+/* ===== RENDER CATEGORIES & CHANNELS ===== */
+function renderCategories(groups) {
+    const container = document.getElementById("category_list");
+    container.innerHTML = `<div class="item" tabindex="0" onclick="filterGroup('all')">ALL CHANNELS</div>`;
+    groups.forEach(g => {
+        const d = document.createElement("div"); d.className = "item"; d.tabIndex = 0;
+        d.innerText = g; d.onclick = () => filterGroup(g);
+        container.appendChild(d);
+    });
+}
+
+function renderChannels(list) {
+    const container = document.getElementById("channel_list");
+    container.innerHTML = "";
+    list.forEach(ch => {
+        const d = document.createElement("div"); d.className = "item"; d.tabIndex = 0;
+        d.innerHTML = `<img src="${ch.logo}" onerror="this.style.display='none'"><span>${ch.name}</span>`;
+        d.onclick = () => playChannel(ch, d);
+        container.appendChild(d);
+    });
+}
+
+/* ===== FILTER GROUP ===== */
+function filterGroup(g) {
+    document.getElementById("group_name").innerText = g.toUpperCase();
+    const filtered = g === 'all' ? allChannels : allChannels.filter(c => c.group === g);
+    renderChannels(filtered);
+    // hide category nav automatically
+    document.getElementById("category-nav").classList.remove("show");
+
+    // Focus first channel in filtered list
+    document.querySelector("#channel_list .item")?.focus();
+
+    // Show channel nav if hidden
+    document.getElementById("channel-nav").classList.remove("hide");
+}
+
+/* ===== PLAY CHANNEL ===== */
+function playChannel(ch, el) {
+    document.querySelectorAll(".item").forEach(x => x.classList.remove("active"));
+    if(el) el.classList.add("active");
+
+    if(hls) { hls.destroy(); hls=null; }
+    if(dash) { dash.reset(); dash=null; }
+
+    if(ch.url.endsWith(".mpd")) { dash=dashjs.MediaPlayer().create(); dash.initialize(video,ch.url,true);}
+    else if(Hls.isSupported()) { hls=new Hls(); hls.loadSource(ch.url); hls.attachMedia(video);}
+    else video.src = ch.url;
+
+    document.getElementById("info_name").innerText = ch.name;
+    document.getElementById("info_group").innerText = ch.group;
+    const bar = document.getElementById("info-bar");
+    bar.style.display="block"; setTimeout(()=>bar.style.display="none",4000);
+
+    // hide channel nav in mobile
+    if(window.innerWidth < 800) document.getElementById("channel-nav").classList.add("hide");
+}
+
+/* ===== KEYBOARD / REMOTE NAV ===== */
+document.addEventListener("keydown", e => {
+    const active = document.activeElement;
+    const cat = document.getElementById("category-nav");
+    const chan = document.getElementById("channel-nav");
+
+    if(e.key === "ArrowDown") active?.nextElementSibling?.focus();
+    if(e.key === "ArrowUp") active?.previousElementSibling?.focus();
+
+    if(e.key === "ArrowLeft") { 
+        cat.classList.add("show"); 
+        chan.classList.add("hide"); 
+        document.querySelector("#category_list .item")?.focus(); 
+    }
+    if(e.key === "ArrowRight") { 
+        cat.classList.remove("show"); 
+        chan.classList.remove("hide");
+        document.querySelector("#channel_list .item")?.focus();
+    }
+    if(e.key === "Enter") active?.click();
+});
+</script>
+</body>
+</html>
