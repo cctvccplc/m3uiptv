@@ -95,7 +95,7 @@ async function processLogin() {
         parseM3U(await r.text());
         document.getElementById("boot_loader").style.display = "none";
         if(allChannels.length > 0) {
-            playChannel(allChannels[0], null); // Auto play first
+            playChannel(allChannels[0], null); 
         }
     } catch(e) { alert("Failed to Load Playlist"); }
 }
@@ -149,7 +149,6 @@ function filterGroup(g) {
     setTimeout(() => document.querySelector("#channel_list .item")?.focus(), 100);
 }
 
-/* PLAY & AUTO HIDE SIDEBAR */
 function playChannel(ch, el) {
     document.querySelectorAll(".item").forEach(x => x.classList.remove("active"));
     if(el) el.classList.add("active");
@@ -166,50 +165,68 @@ function playChannel(ch, el) {
     const bar = document.getElementById("info-bar");
     bar.style.display="block"; setTimeout(()=>bar.style.display="none",4000);
 
-    // চ্যানেল সিলেক্ট করলে সাইডবার চলে যাবে
     chanNav.classList.add("hide");
     catNav.classList.remove("show");
     video.focus();
 }
 
-/* KEYBOARD / REMOTE NAV */
+/* KEYBOARD / REMOTE / TOUCH NAV */
+let touchstartX = 0;
+let touchendX = 0;
+
+document.addEventListener('touchstart', e => { touchstartX = e.changedTouches[0].screenX; });
+document.addEventListener('touchend', e => { touchendX = e.changedTouches[0].screenX; handleGesture(); });
+
+function handleGesture() {
+    if (touchendX > touchstartX + 100) { 
+        if(chanNav.classList.contains("hide")) { chanNav.classList.remove("hide"); } 
+        else { catNav.classList.add("show"); } 
+    }
+}
+
 document.addEventListener("keydown", e => {
-    // যদি সাইডবার হাইড থাকে এবং অ্যারো বাটন চাপা হয়
+    const active = document.activeElement;
+
+    if(e.key === "Escape" || e.key === "Backspace" || e.keyCode === 461 || e.keyCode === 10009) {
+        if (!chanNav.classList.contains("hide") || catNav.classList.contains("show")) {
+            e.preventDefault();
+            chanNav.classList.add("hide");
+            catNav.classList.remove("show");
+            video.focus();
+        }
+        return;
+    }
+
     if(chanNav.classList.contains("hide") && !catNav.classList.contains("show")) {
-        if(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Enter"].includes(e.key)) {
+        if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Enter","OK"].includes(e.key) || e.keyCode===13) {
             chanNav.classList.remove("hide");
-            const active = document.querySelector("#channel_list .item.active") || document.querySelector("#channel_list .item");
-            active?.focus();
+            setTimeout(()=>{(document.querySelector(".item.active") || document.querySelector("#channel_list .item"))?.focus();},100);
             return;
         }
     }
 
-    const active = document.activeElement;
+    switch(e.key){
+        case "ArrowDown": e.preventDefault(); active?.nextElementSibling?.focus(); break;
+        case "ArrowUp": e.preventDefault(); active?.previousElementSibling?.focus(); break;
+        case "ArrowLeft": 
+            if(!catNav.classList.contains("show")) { 
+                catNav.classList.add("show"); chanNav.classList.add("hide"); 
+                setTimeout(()=>document.querySelector("#category_list .item")?.focus(),50); 
+            } 
+            break;
+        case "ArrowRight": 
+            if(catNav.classList.contains("show")) { 
+                catNav.classList.remove("show"); chanNav.classList.remove("hide"); 
+                setTimeout(()=>document.querySelector("#channel_list .item")?.focus(),50); 
+            } 
+            break;
+        case "Enter": case "OK": active?.click(); break;
+    }
+});
 
-    if(e.key === "ArrowDown") { e.preventDefault(); active?.nextElementSibling?.focus(); }
-    if(e.key === "ArrowUp") { e.preventDefault(); active?.previousElementSibling?.focus(); }
-
-    if(e.key === "ArrowLeft") { 
-        if(!catNav.classList.contains("show")) {
-            catNav.classList.add("show"); 
-            chanNav.classList.add("hide"); 
-            document.querySelector("#category_list .item")?.focus(); 
-        }
-    }
-    if(e.key === "ArrowRight") { 
-        if(catNav.classList.contains("show")) {
-            catNav.classList.remove("show"); 
-            chanNav.classList.remove("hide");
-            document.querySelector("#channel_list .item")?.focus();
-        }
-    }
-    if(e.key === "Enter") active?.click();
-    
-    // Back বা Escape চাপলে স্লাইড বার হাইড হবে
-    if(e.key === "Escape" || e.key === "Backspace") {
-        chanNav.classList.add("hide");
-        catNav.classList.remove("show");
-    }
+video.addEventListener("click", ()=>{
+    if(chanNav.classList.contains("hide")) { chanNav.classList.remove("hide"); } 
+    else { chanNav.classList.add("hide"); catNav.classList.remove("show"); }
 });
 </script>
 </body>
