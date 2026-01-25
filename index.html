@@ -3,7 +3,7 @@
 <head>
     <meta charset='utf-8'/>
     <meta content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no' name='viewport'/>
-    <title>IPTV PRO - Enhanced Navigation</title>
+    <title>IPTV PRO - Standard Reset Edition</title>
     
     <script src='https://cdn.jsdelivr.net/npm/hls.js@latest'></script>
     <script src='https://cdn.jsdelivr.net/npm/dashjs@latest/dist/dash.all.min.js'></script>
@@ -66,7 +66,7 @@
     <div class='overlay-panel' id='category-nav'>
         <div class='nav-header'>📁 CATEGORIES</div>
         <div class='list-container' id='category_list'></div>
-        <div style='padding:15px;'><button id='logout-btn' onclick='logout()' style="width:100%; padding:10px; background:#ff4d4d; border:none; border-radius:8px; color:#fff; cursor:pointer;">🚪 Change Playlist</button></div>
+        <div style='padding:15px;'><button id='logout-btn' onclick='logout()' style="width:100%; padding:10px; background:#ff4d4d; border:none; border-radius:8px; color:#fff; cursor:pointer;" tabindex="0">🚪 Change Playlist</button></div>
     </div>
 
     <div class='overlay-panel' id='channel-nav'>
@@ -81,7 +81,6 @@
     let lastChannelFocus = null, lastCategoryFocus = null;
     let touchStartX = 0, touchEndX = 0;
 
-    // Load Predefined Links
     function loadCustom(type) {
         showLoader(true);
         let url = "";
@@ -91,6 +90,12 @@
         
         document.getElementById('pl_url').value = ""; 
         fetchAndProcess(url, false);
+    }
+
+    async function loadFromLink(shouldSave = true) {
+        const url = document.getElementById('pl_url').value.trim();
+        if(!url) return;
+        fetchAndProcess(url, shouldSave);
     }
 
     async function fetchAndProcess(url, shouldSave) {
@@ -105,7 +110,6 @@
         }
     }
 
-    // Swipe Navigation Control (Original)
     document.addEventListener('touchstart', e => { touchStartX = e.changedTouches[0].screenX; }, false);
     document.addEventListener('touchend', e => {
         touchEndX = e.changedTouches[0].screenX;
@@ -127,7 +131,6 @@
         }
     }
 
-    // Process Playlist Data
     function processData(data) {
         parseM3U(data);
         document.getElementById('boot_loader').style.display = 'none';
@@ -154,7 +157,7 @@
             }
         }
         const cb = document.getElementById("category_list");
-        cb.innerHTML = `<div class="item cat-item" tabindex="0" onclick="renderChannels(allChannels)">🏠 All Channels</div>`;
+        cb.innerHTML = `<div class="item cat-item" tabindex="0" onclick="renderChannels(allChannels, this)">🏠 All Channels</div>`;
         Array.from(groups).sort().forEach(g => {
             cb.innerHTML += `<div class="item cat-item" tabindex="0" onclick="filterByCategory('${g}', this)">📁 ${g}</div>`;
         });
@@ -204,7 +207,6 @@
         if(!isAuto) hideMenus();
     }
 
-    // Keyboard Navigation Control (Original)
     window.addEventListener("keydown", (e) => {
         const isCatShow = document.getElementById("category-nav").classList.contains("show");
         const isChShow = document.getElementById("channel-nav").classList.contains("show");
@@ -218,11 +220,16 @@
             if (active.nextElementSibling) {
                 active.nextElementSibling.focus();
                 active.nextElementSibling.scrollIntoView({ block: "nearest" });
+            } else if (isCatShow && active.classList.contains('cat-item')) {
+                document.getElementById("logout-btn").focus();
             }
         } 
         else if (e.key === "ArrowUp") {
             e.preventDefault();
-            if (active.previousElementSibling) {
+            if (active.id === "logout-btn") {
+                const lastCat = document.getElementById("category_list").lastElementChild;
+                if(lastCat) lastCat.focus();
+            } else if (active.previousElementSibling) {
                 active.previousElementSibling.focus();
                 active.previousElementSibling.scrollIntoView({ block: "nearest" });
             }
@@ -261,7 +268,16 @@
     function showLoader(show) { document.getElementById('loader').style.display = show ? 'block' : 'none'; }
     function hideMenus() { document.querySelectorAll(".overlay-panel").forEach(p => p.classList.remove("show")); }
     function resetTimer() { clearTimeout(hideTimeout); hideTimeout = setTimeout(hideMenus, 4000); }
-    function logout() { location.reload(); }
+    
+    // Change Playlist / Logout logic
+    function logout() { 
+        const video = document.getElementById("player");
+        video.pause(); video.src = "";
+        if(hls) hls.destroy(); if(dash) dash.reset();
+        document.getElementById("boot_loader").style.display = "flex"; 
+        document.getElementById('pip_btn').style.display = 'none';
+        hideMenus(); 
+    }
 
     function handleGlobalClick(e) { 
         if(!e.target.closest('.overlay-panel') && !e.target.closest('.setup-box')) {
