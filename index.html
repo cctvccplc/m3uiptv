@@ -3,7 +3,7 @@
 <head>
     <meta charset='utf-8'/>
     <meta content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no' name='viewport'/>
-    <title>IPTV PRO - Enhanced Edition</title>
+    <title>IPTV PRO - Enhanced Navigation</title>
     
     <script src='https://cdn.jsdelivr.net/npm/hls.js@latest'></script>
     <script src='https://cdn.jsdelivr.net/npm/dashjs@latest/dist/dash.all.min.js'></script>
@@ -12,7 +12,6 @@
     :root { --panel-bg: rgba(12, 12, 12, 0.98); --accent: #3b82f6; --glass: rgba(255, 255, 255, 0.08); --bg: #0a0a0a; }
     body, html { margin: 0; padding: 0; background: var(--bg); color: #fff; font-family: 'Segoe UI', sans-serif; height: 100vh; overflow: hidden; touch-action: pan-y; }
     
-    /* Loading Spinner */
     #loader { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1000; border: 4px solid #f3f3f3; border-top: 4px solid var(--accent); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
     @keyframes spin { 0% { transform: translate(-50%, -50%) rotate(0deg); } 100% { transform: translate(-50%, -50%) rotate(360deg); } }
 
@@ -29,11 +28,10 @@
     .overlay-panel { position: fixed; top: 0; bottom: 0; z-index: 100; background: var(--panel-bg); width: 280px; transform: translateX(-100%); transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1); border-right: 1px solid #333; backdrop-filter: blur(20px); }
     .overlay-panel.show { transform: translateX(0); }
     
-    /* Search Bar Style */
     .search-box { padding: 15px; border-bottom: 1px solid #333; }
     .search-box input { width: 100%; padding: 10px; background: #222; border: 1px solid #444; border-radius: 8px; color: #fff; outline: none; }
 
-    .nav-header { padding: 20px; font-weight: bold; border-bottom: 1px solid #333; color: var(--accent); display: flex; justify-content: space-between; }
+    .nav-header { padding: 20px; font-weight: bold; border-bottom: 1px solid #333; color: var(--accent); display: flex; justify-content: space-between; align-items: center; }
     .list-container { height: calc(100% - 180px); overflow-y: auto; padding: 15px; }
     
     .item { padding: 12px; margin-bottom: 8px; border-radius: 10px; display: flex; align-items: center; cursor: pointer; background: var(--glass); outline: none; border: 2px solid transparent; }
@@ -80,9 +78,10 @@
 
     <script>
     let allChannels = [], hls, dash, hideTimeout;
+    let lastChannelFocus = null, lastCategoryFocus = null;
     let touchStartX = 0, touchEndX = 0;
 
-    // Load Predefined
+    // Load Predefined Links
     function loadCustom(type) {
         showLoader(true);
         let url = "";
@@ -106,13 +105,36 @@
         }
     }
 
+    // Swipe Navigation Control (Original)
+    document.addEventListener('touchstart', e => { touchStartX = e.changedTouches[0].screenX; }, false);
+    document.addEventListener('touchend', e => {
+        touchEndX = e.changedTouches[0].screenX;
+        handleSwipe();
+    }, false);
+
+    function handleSwipe() {
+        const swipeDistance = touchEndX - touchStartX;
+        const threshold = 100;
+        const isCatShow = document.getElementById("category-nav").classList.contains("show");
+        const isChShow = document.getElementById("channel-nav").classList.contains("show");
+
+        if (swipeDistance > threshold) {
+            if (!isCatShow && !isChShow) showChannels(true);
+            else if (isChShow) showCategories(true);
+        } else if (swipeDistance < -threshold) {
+            if (isCatShow) showChannels(true);
+            else if (isChShow) hideMenus();
+        }
+    }
+
+    // Process Playlist Data
     function processData(data) {
         parseM3U(data);
         document.getElementById('boot_loader').style.display = 'none';
         document.getElementById('pip_btn').style.display = 'block';
         renderChannels(allChannels);
         if(allChannels.length > 0) playChannel(allChannels[0].url, null, true);
-        showChannels();
+        showChannels(false);
     }
 
     function parseM3U(data) {
@@ -132,40 +154,42 @@
             }
         }
         const cb = document.getElementById("category_list");
-        cb.innerHTML = `<div class="item" onclick="renderChannels(allChannels)">🏠 All Channels</div>`;
+        cb.innerHTML = `<div class="item cat-item" tabindex="0" onclick="renderChannels(allChannels)">🏠 All Channels</div>`;
         Array.from(groups).sort().forEach(g => {
-            cb.innerHTML += `<div class="item" onclick="filterByCategory('${g}')">📁 ${g}</div>`;
+            cb.innerHTML += `<div class="item cat-item" tabindex="0" onclick="filterByCategory('${g}', this)">📁 ${g}</div>`;
         });
     }
 
-    function renderChannels(list) {
+    function renderChannels(list, el = null) {
+        if(el) lastCategoryFocus = el;
         const cl = document.getElementById("channel_list");
         cl.innerHTML = list.map(ch => `
             <div class="item ch-item" tabindex="0" onclick='playChannel("${ch.url}", this)'>
                 <img src="${ch.logo}" onerror="this.src='https://cdn-icons-png.flaticon.com/512/716/716429.png'">
                 <span>${ch.name}</span>
             </div>`).join('');
-        showChannels();
+        showChannels(false);
     }
 
-    // Search Function
+    function filterByCategory(g, el) {
+        lastCategoryFocus = el;
+        const filtered = allChannels.filter(c => c.group === g);
+        renderChannels(filtered);
+    }
+
     function filterChannels() {
         const query = document.getElementById("channel_search").value.toLowerCase();
         const filtered = allChannels.filter(ch => ch.name.toLowerCase().includes(query));
         const cl = document.getElementById("channel_list");
         cl.innerHTML = filtered.map(ch => `
-            <div class="item" onclick='playChannel("${ch.url}", this)'>
+            <div class="item ch-item" tabindex="0" onclick='playChannel("${ch.url}", this)'>
                 <img src="${ch.logo}">
                 <span>${ch.name}</span>
             </div>`).join('');
     }
 
-    function filterByCategory(g) {
-        const filtered = allChannels.filter(c => c.group === g);
-        renderChannels(filtered);
-    }
-
     function playChannel(url, el, isAuto = false) {
+        if(el) lastChannelFocus = el;
         showLoader(true);
         const video = document.getElementById("player");
         if(hls) hls.destroy(); if(dash) dash.reset();
@@ -180,25 +204,68 @@
         if(!isAuto) hideMenus();
     }
 
-    // Picture in Picture
-    async function togglePiP() {
-        const video = document.getElementById('player');
-        if (document.pictureInPictureElement) {
-            await document.exitPictureInPicture();
-        } else if (document.pictureInPictureEnabled) {
-            await video.requestPictureInPicture();
+    // Keyboard Navigation Control (Original)
+    window.addEventListener("keydown", (e) => {
+        const isCatShow = document.getElementById("category-nav").classList.contains("show");
+        const isChShow = document.getElementById("channel-nav").classList.contains("show");
+        
+        if(!isCatShow && !isChShow && ["ArrowUp", "ArrowDown", "Enter"].includes(e.key)) { showChannels(true); return; }
+        
+        const active = document.activeElement;
+
+        if (e.key === "ArrowDown") {
+            e.preventDefault();
+            if (active.nextElementSibling) {
+                active.nextElementSibling.focus();
+                active.nextElementSibling.scrollIntoView({ block: "nearest" });
+            }
+        } 
+        else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            if (active.previousElementSibling) {
+                active.previousElementSibling.focus();
+                active.previousElementSibling.scrollIntoView({ block: "nearest" });
+            }
         }
+        else if (e.key === "ArrowLeft") { e.preventDefault(); isChShow ? showCategories(true) : hideMenus(); }
+        else if (e.key === "ArrowRight" && isCatShow) { e.preventDefault(); showChannels(true); }
+        else if (e.key === "Enter") { e.preventDefault(); active.click(); }
+        else if (e.key === "Escape") { e.preventDefault(); hideMenus(); }
+        resetTimer();
+    });
+
+    function showChannels(restore = true) {
+        hideMenus(); 
+        document.getElementById("channel-nav").classList.add("show");
+        setTimeout(() => {
+            let target = (restore && lastChannelFocus) ? lastChannelFocus : document.querySelector(".ch-item");
+            if(target) target.focus();
+        }, 150);
+    }
+
+    function showCategories(restore = true) {
+        hideMenus(); 
+        document.getElementById("category-nav").classList.add("show");
+        setTimeout(() => {
+            let target = (restore && lastCategoryFocus) ? lastCategoryFocus : document.querySelector(".cat-item");
+            if(target) target.focus();
+        }, 150);
+    }
+
+    function togglePiP() {
+        const video = document.getElementById('player');
+        if (document.pictureInPictureElement) document.exitPictureInPicture();
+        else video.requestPictureInPicture();
     }
 
     function showLoader(show) { document.getElementById('loader').style.display = show ? 'block' : 'none'; }
-    function showChannels() { hideMenus(); document.getElementById("channel-nav").classList.add("show"); }
     function hideMenus() { document.querySelectorAll(".overlay-panel").forEach(p => p.classList.remove("show")); }
+    function resetTimer() { clearTimeout(hideTimeout); hideTimeout = setTimeout(hideMenus, 4000); }
     function logout() { location.reload(); }
 
     function handleGlobalClick(e) { 
         if(!e.target.closest('.overlay-panel') && !e.target.closest('.setup-box')) {
-            const isMenuShow = document.querySelector(".overlay-panel.show");
-            if(!isMenuShow) showChannels();
+            if(!document.querySelector(".overlay-panel.show")) showChannels(true);
         }
     }
     </script>
