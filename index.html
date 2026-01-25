@@ -3,7 +3,7 @@
 <head>
     <meta charset='utf-8'/>
     <meta content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no' name='viewport'/>
-    <title>IPTV PRO - Standard Reset Edition</title>
+    <title>IPTV PRO - Navigation Fixed</title>
     
     <script src='https://cdn.jsdelivr.net/npm/hls.js@latest'></script>
     <script src='https://cdn.jsdelivr.net/npm/dashjs@latest/dist/dash.all.min.js'></script>
@@ -71,7 +71,7 @@
 
     <div class='overlay-panel' id='channel-nav'>
         <div class='search-box'>
-            <input type="text" id="channel_search" placeholder="Search channel..." onkeyup="filterChannels()">
+            <input type="text" id="channel_search" placeholder="Search channel..." onkeyup="filterChannels()" tabindex="0">
         </div>
         <div class='list-container' id='channel_list'></div>
     </div>
@@ -87,8 +87,6 @@
         if(type === "roar") url = "https://raw.githubusercontent.com/omnixmain/OMNIX-PLAYLIST-ZONE/refs/heads/main/playlist/RoarZoneTv.m3u";
         if(type === "crown") url = "https://raw.githubusercontent.com/abusaeeidx/IPTV-Scraper-Zilla/refs/heads/main/BD.m3u";
         if(type === "bangla") url = "https://raw.githubusercontent.com/cctvccplc/Tv-Test/refs/heads/main/BD26.m3u8";
-        
-        document.getElementById('pl_url').value = ""; 
         fetchAndProcess(url, false);
     }
 
@@ -104,32 +102,22 @@
             const data = await res.text();
             processData(data);
             showLoader(false);
-        } catch(e) { 
-            showLoader(false);
-            alert("Connection Error!"); 
-        }
+        } catch(e) { showLoader(false); alert("Connection Error!"); }
     }
 
+    // Swipe Navigation
     document.addEventListener('touchstart', e => { touchStartX = e.changedTouches[0].screenX; }, false);
     document.addEventListener('touchend', e => {
         touchEndX = e.changedTouches[0].screenX;
-        handleSwipe();
-    }, false);
-
-    function handleSwipe() {
         const swipeDistance = touchEndX - touchStartX;
-        const threshold = 100;
-        const isCatShow = document.getElementById("category-nav").classList.contains("show");
-        const isChShow = document.getElementById("channel-nav").classList.contains("show");
-
-        if (swipeDistance > threshold) {
-            if (!isCatShow && !isChShow) showChannels(true);
-            else if (isChShow) showCategories(true);
-        } else if (swipeDistance < -threshold) {
-            if (isCatShow) showChannels(true);
-            else if (isChShow) hideMenus();
+        if (swipeDistance > 100) {
+            if (!document.getElementById("category-nav").classList.contains("show") && !document.getElementById("channel-nav").classList.contains("show")) showChannels(true);
+            else if (document.getElementById("channel-nav").classList.contains("show")) showCategories(true);
+        } else if (swipeDistance < -100) {
+            if (document.getElementById("category-nav").classList.contains("show")) showChannels(true);
+            else if (document.getElementById("channel-nav").classList.contains("show")) hideMenus();
         }
-    }
+    }, false);
 
     function processData(data) {
         parseM3U(data);
@@ -137,7 +125,6 @@
         document.getElementById('pip_btn').style.display = 'block';
         renderChannels(allChannels);
         if(allChannels.length > 0) playChannel(allChannels[0].url, null, true);
-        showChannels(false);
     }
 
     function parseM3U(data) {
@@ -196,20 +183,21 @@
         showLoader(true);
         const video = document.getElementById("player");
         if(hls) hls.destroy(); if(dash) dash.reset();
-        
         if(url.includes(".m3u8")) {
             if(Hls.isSupported()) { hls = new Hls(); hls.loadSource(url); hls.attachMedia(video); hls.on(Hls.Events.MANIFEST_PARSED,()=>video.play()); }
             else { video.src = url; video.play(); }
         } else if(url.includes(".mpd")) { dash = dashjs.MediaPlayer().create(); dash.initialize(video, url, true); }
         else { video.src = url; video.play(); }
-
         video.onplaying = () => showLoader(false);
         if(!isAuto) hideMenus();
     }
 
+    // Fixed Keyboard Navigation
     window.addEventListener("keydown", (e) => {
-        const isCatShow = document.getElementById("category-nav").classList.contains("show");
-        const isChShow = document.getElementById("channel-nav").classList.contains("show");
+        const catNav = document.getElementById("category-nav");
+        const chNav = document.getElementById("channel-nav");
+        const isCatShow = catNav.classList.contains("show");
+        const isChShow = chNav.classList.contains("show");
         
         if(!isCatShow && !isChShow && ["ArrowUp", "ArrowDown", "Enter"].includes(e.key)) { showChannels(true); return; }
         
@@ -243,20 +231,23 @@
 
     function showChannels(restore = true) {
         hideMenus(); 
-        document.getElementById("channel-nav").classList.add("show");
+        const nav = document.getElementById("channel-nav");
+        nav.classList.add("show");
         setTimeout(() => {
             let target = (restore && lastChannelFocus) ? lastChannelFocus : document.querySelector(".ch-item");
+            if(!target) target = document.getElementById("channel_search");
             if(target) target.focus();
-        }, 150);
+        }, 200);
     }
 
     function showCategories(restore = true) {
         hideMenus(); 
-        document.getElementById("category-nav").classList.add("show");
+        const nav = document.getElementById("category-nav");
+        nav.classList.add("show");
         setTimeout(() => {
             let target = (restore && lastCategoryFocus) ? lastCategoryFocus : document.querySelector(".cat-item");
             if(target) target.focus();
-        }, 150);
+        }, 200);
     }
 
     function togglePiP() {
@@ -267,9 +258,8 @@
 
     function showLoader(show) { document.getElementById('loader').style.display = show ? 'block' : 'none'; }
     function hideMenus() { document.querySelectorAll(".overlay-panel").forEach(p => p.classList.remove("show")); }
-    function resetTimer() { clearTimeout(hideTimeout); hideTimeout = setTimeout(hideMenus, 4000); }
+    function resetTimer() { clearTimeout(hideTimeout); hideTimeout = setTimeout(hideMenus, 5000); }
     
-    // Change Playlist / Logout logic
     function logout() { 
         const video = document.getElementById("player");
         video.pause(); video.src = "";
