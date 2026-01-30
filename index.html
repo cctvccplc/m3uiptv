@@ -2,16 +2,15 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gemini Ultra IPTV</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Smart IPTV Player</title>
     <link href="https://vjs.zencdn.net/8.10.0/video-js.css" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;500;700&display=swap" rel="stylesheet">
     <style>
         :root {
             --accent: #00f2fe;
-            --bg: #050505;
-            --sidebar: #111;
-            --card-bg: #1a1a1a;
+            --bg: #000;
+            --sidebar-width: 320px;
         }
 
         body, html {
@@ -20,102 +19,87 @@
             font-family: 'Poppins', sans-serif; overflow: hidden;
         }
 
-        .app-wrapper { display: flex; height: 100vh; }
+        .app-wrapper { display: flex; height: 100vh; position: relative; }
 
-        /* Sidebar & Navigation */
+        /* Sidebar Navigation */
         #sidebar {
-            width: 350px;
-            background: var(--sidebar);
+            width: var(--sidebar-width);
+            background: rgba(15, 15, 15, 0.95);
+            backdrop-filter: blur(10px);
             border-right: 1px solid #222;
             display: flex;
             flex-direction: column;
-            z-index: 100;
+            z-index: 1000;
+            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: absolute;
+            top: 0; bottom: 0; left: 0;
         }
 
-        .header-box {
-            padding: 25px;
-            background: linear-gradient(to bottom, #1a1a1a, var(--sidebar));
-            text-align: center;
+        /* Sidebar hidden state */
+        .sidebar-hidden #sidebar {
+            transform: translateX(-100%);
         }
 
+        .header-box { padding: 20px; text-align: center; border-bottom: 1px solid #222; }
+        
         .back-btn {
-            background: var(--accent);
-            color: #000; border: none;
+            background: var(--accent); color: #000; border: none;
             padding: 8px 15px; border-radius: 20px;
-            cursor: pointer; font-weight: bold;
-            display: none; margin-bottom: 10px;
+            cursor: pointer; font-weight: bold; display: none; margin-bottom: 10px;
+            width: 100%;
         }
 
-        /* Content Area */
-        #content-list {
-            flex: 1;
-            overflow-y: auto;
-            padding: 15px;
-        }
+        #content-list { flex: 1; overflow-y: auto; padding: 15px; }
 
-        /* Playlist Cards (Home View) */
+        /* Playlist Cards */
         .playlist-card {
-            background: var(--card-bg);
-            padding: 25px;
-            margin-bottom: 15px;
-            border-radius: 12px;
-            cursor: pointer;
-            border: 2px solid transparent;
-            transition: 0.3s;
-            text-align: center;
+            background: #1a1a1a; padding: 20px; margin-bottom: 15px;
+            border-radius: 12px; cursor: pointer; border: 2px solid transparent;
+            text-align: center; transition: 0.3s;
         }
-        .playlist-card:focus, .playlist-card:hover {
-            border-color: var(--accent);
-            transform: scale(1.02);
-            background: #222;
-            outline: none;
-        }
+        .playlist-card:focus, .playlist-card:hover { border-color: var(--accent); background: #222; outline: none; }
 
-        /* Channel Items (Internal View) */
+        /* Channel Items */
         .channel-row {
-            padding: 12px;
-            margin-bottom: 5px;
-            background: #1a1a1a;
-            border-radius: 8px;
-            cursor: pointer;
-            outline: none;
-            display: flex;
-            align-items: center;
+            padding: 14px; margin-bottom: 8px; background: #111;
+            border-radius: 8px; cursor: pointer; outline: none; border-left: 4px solid transparent;
         }
-        .channel-row:focus {
-            background: var(--accent);
-            color: #000;
+        .channel-row:focus, .channel-row.active {
+            background: var(--accent); color: #000; border-left: 4px solid #fff;
         }
 
         /* Player Area */
         #player-container {
-            flex: 1;
-            background: #000;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            flex: 1; width: 100%; height: 100%;
+            background: #000; display: flex; align-items: center; justify-content: center;
         }
 
         .video-js { width: 100% !important; height: 100% !important; }
 
-        .hidden { display: none !important; }
+        /* Overlay for touch interaction */
+        #touch-overlay {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            z-index: 500; display: none;
+        }
+        .sidebar-hidden #touch-overlay { display: block; }
+
     </style>
 </head>
-<body>
+<body class="">
 
-<div class="app-wrapper">
+<div class="app-wrapper" id="app">
     <aside id="sidebar">
         <div class="header-box">
-            <button id="backBtn" class="back-btn">← Back to Playlists</button>
-            <h2 id="viewTitle" style="margin:0; font-size: 1.4rem;">Home</h2>
+            <button id="backBtn" class="back-btn">← Back to Menu</button>
+            <h3 id="viewTitle" style="margin:0;">IPTV Home</h3>
         </div>
-        
-        <div id="content-list">
-            </div>
+        <div id="content-list"></div>
     </aside>
 
+    <div id="touch-overlay"></div>
+
     <main id="player-container">
-        <video id="main-video" class="video-js vjs-big-play-centered vjs-theme-city" controls preload="auto"></video>
+        <video id="main-video" class="video-js vjs-big-play-centered" controls preload="auto"></video>
     </main>
 </div>
 
@@ -123,101 +107,102 @@
 <script>
     const m3uPlaylists = [
         { name: "Dish TV Premium", url: "https://raw.githubusercontent.com/alex8875/m3u/refs/heads/main/dishtv.m3u", icon: "📡" },
-        { name: "Arabic Sports Live", url: "https://omnix-playlist-server.pages.dev/playlist/omnixott-Arabic_Sports.m3u", icon: "⚽" },
-        { name: "BD Local Channels", url: "https://raw.githubusercontent.com/cctvccplc/Tv-Test/refs/heads/main/BD26.m3u8", icon: "🇧🇩" }
+        { name: "Arabic Sports", url: "https://omnix-playlist-server.pages.dev/playlist/omnixott-Arabic_Sports.m3u", icon: "⚽" },
+        { name: "BD Local", url: "https://raw.githubusercontent.com/cctvccplc/Tv-Test/refs/heads/main/BD26.m3u8", icon: "🇧🇩" }
     ];
 
     const player = videojs('main-video');
+    const app = document.getElementById('app');
     const contentList = document.getElementById('content-list');
     const viewTitle = document.getElementById('viewTitle');
     const backBtn = document.getElementById('backBtn');
+    const touchOverlay = document.getElementById('touch-overlay');
 
-    // ১. হোম স্ক্রিন জেনারেট করা
+    // সাইডবার দেখানো বা লুকানোর ফাংশন
+    function toggleSidebar(show) {
+        if (show) app.classList.remove('sidebar-hidden');
+        else app.classList.add('sidebar-hidden');
+    }
+
+    // স্ক্রিনে টাচ বা ক্লিক করলে সাইডবার ফিরে আসবে
+    touchOverlay.addEventListener('click', () => toggleSidebar(true));
+    player.on('touchstart', () => toggleSidebar(true));
+    player.on('mousemove', () => toggleSidebar(true));
+
+    // ১. হোম স্ক্রিন
     function showHome() {
+        toggleSidebar(true);
         backBtn.style.display = "none";
         viewTitle.innerText = "IPTV Home";
         contentList.innerHTML = '';
 
-        m3uPlaylists.forEach((pl, index) => {
+        m3uPlaylists.forEach(pl => {
             const card = document.createElement('div');
             card.className = 'playlist-card';
             card.tabIndex = 0;
-            card.innerHTML = `
-                <div style="font-size: 40px;">${pl.icon}</div>
-                <h3>${pl.name}</h3>
-                <p style="color: #888; font-size: 12px;">Click to view categories</p>
-            `;
+            card.innerHTML = `<div style="font-size:30px">${pl.icon}</div><h4>${pl.name}</h4>`;
             card.onclick = () => loadPlaylist(pl);
-            card.onkeydown = (e) => { if(e.key === 'Enter') loadPlaylist(pl); };
+            card.onkeydown = (e) => e.key === 'Enter' && loadPlaylist(pl);
             contentList.appendChild(card);
         });
         contentList.firstChild.focus();
     }
 
-    // ২. প্লেলিস্টের ভেতরে ঢোকা এবং চ্যানেল লোড করা
+    // ২. প্লেলিস্ট লোড
     async function loadPlaylist(pl) {
-        contentList.innerHTML = '<p style="text-align:center;">Loading Channels...</p>';
+        contentList.innerHTML = '<p>Loading...</p>';
         viewTitle.innerText = pl.name;
         backBtn.style.display = "block";
 
         try {
-            const response = await fetch(pl.url);
-            const text = await response.text();
-            const lines = text.split('\n');
-            
+            const res = await fetch(pl.url);
+            const text = await res.text();
             contentList.innerHTML = '';
+            
             let currentName = "";
-
-            lines.forEach(line => {
+            text.split('\n').forEach(line => {
                 if (line.startsWith('#EXTINF:')) {
-                    currentName = line.split(',')[1] || "Unknown Stream";
+                    currentName = line.split(',')[1] || "Channel";
                 } else if (line.startsWith('http')) {
-                    const streamUrl = line.trim();
+                    const url = line.trim();
                     const row = document.createElement('div');
                     row.className = 'channel-row';
                     row.tabIndex = 0;
-                    row.innerHTML = `<span>▶</span> &nbsp; ${currentName}`;
-                    
-                    row.onclick = () => playChannel(streamUrl, row);
-                    row.onkeydown = (e) => { if(e.key === 'Enter') playChannel(streamUrl, row); };
-                    
+                    row.innerText = currentName;
+                    row.onclick = () => playChannel(url, row);
+                    row.onkeydown = (e) => e.key === 'Enter' && playChannel(url, row);
                     contentList.appendChild(row);
                 }
             });
-            
-            if(contentList.firstChild) contentList.firstChild.focus();
-
-        } catch (error) {
-            contentList.innerHTML = '<p style="color:red;">Failed to load playlist.</p>';
-        }
+            contentList.firstChild.focus();
+        } catch (e) { contentList.innerHTML = '<p>Error loading.</p>'; }
     }
 
-    // ৩. ভিডিও প্লে করা
+    // ৩. চ্যানেল প্লে এবং অটো বার হাইড
     function playChannel(url, el) {
-        document.querySelectorAll('.channel-row').forEach(r => r.style.background = "#1a1a1a");
-        el.style.background = "var(--accent)";
-        el.style.color = "#000";
+        document.querySelectorAll('.channel-row').forEach(r => r.classList.remove('active'));
+        el.classList.add('active');
 
         player.src({ src: url, type: 'application/x-mpegURL' });
         player.play();
+
+        // চ্যানেল প্লে হওয়ার ২ সেকেন্ড পর অটো হাইড হবে
+        setTimeout(() => {
+            toggleSidebar(false);
+        }, 1500);
     }
 
-    // ব্যাক বাটন ইভেন্ট
     backBtn.onclick = showHome;
 
-    // কিবোর্ড নেভিগেশন সাপোর্ট (TV & PC)
+    // TV Remote Navigation
     document.addEventListener('keydown', (e) => {
         const active = document.activeElement;
-        if (e.key === 'ArrowDown') {
-            active.nextElementSibling?.focus();
-        } else if (e.key === 'ArrowUp') {
-            active.previousElementSibling?.focus();
-        }
+        if (e.key === 'ArrowDown') active.nextElementSibling?.focus();
+        else if (e.key === 'ArrowUp') active.previousElementSibling?.focus();
+        else if (e.key === 'm' || e.key === 'Menu') toggleSidebar(true); // 'm' চাপলে মেনু আসবে
     });
 
-    // শুরুতে হোম স্ক্রিন লোড
     showHome();
 </script>
-
 </body>
 </html>
